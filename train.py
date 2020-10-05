@@ -3,26 +3,21 @@
 import argparse
 import os
 import os.path as osp
-
 import torch
 import datetime
-
+from torch.utils import data
+from dataset.gta5_dataset import GTA5DataSet
+from dataset.synthia_dataset import SYNTHIADataSet
+from dataset.cityscapes_dataset import CityScapesDataSet
+from dataset.idd_dataset import IDDDataSet
 from data.GTA5 import GTA5
 from FCN.model import FCN
 from FCN.trainer import Trainer
 from data.data_utils  import get_label_classes
 from FCN.vgg import VGG16
 import pdb 
+from options_train import TrainOptions
 
-configurations = {
-	1: dict(
-		max_iteration=200000,
-		lr=1.0e-12,
-		momentum=0.99,
-		weight_decay=0.0005,
-		interval_validate=5000,
-	)
-}
 
 
 here = osp.dirname(osp.abspath(__file__))
@@ -54,18 +49,9 @@ def get_parameters(model, bias=False):
 			raise ValueError('Unexpected module: %s' % str(m))
 
 def main():
-	parser = argparse.ArgumentParser()
-	parser.add_argument('-c', '--config', type=int, default=1,
-						choices=configurations.keys())
-	parser.add_argument('--resume', help='Checkpoint path', default = 'FCN/checkpoints/')
-	parser.add_argument('-transfer', type=bool, default=False)
-
-	args = parser.parse_args()
-
+	args = TrainOptions().parse()
 	resume = args.resume
-	cfg = configurations[args.config]
 	out = os.getcwd()
-	
 	cuda = torch.cuda.is_available()
 	
 	if cuda:
@@ -78,9 +64,18 @@ def main():
 	kwargs = {'num_workers': 2, 'pin_memory': True} if cuda else {}
 
 
-	train_loader = torch.utils.data.DataLoader(
-		GTA5(root, split='train', transform=True),
-		batch_size=1, shuffle=True, **kwargs)
+	# train_loader = torch.utils.data.DataLoader(
+	# 	GTA5(root, split='train', transform=True),
+	# 	batch_size=1, shuffle=True, **kwargs)
+
+	input_size = (1024, 512)
+
+	train_loader = data.DataLoader(
+		GTA5DataSet(args.data_dir, args.data_list, max_iters=args.num_steps * args.batch_size,
+					crop_size=input_size, ignore_label=args.ignore_label,
+					set=args.set, num_classes=args.num_classes),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+
 	val_loader = torch.utils.data.DataLoader(
 		GTA5(root, split='val', transform=True),
 		batch_size=1, shuffle=False, **kwargs)
@@ -113,11 +108,11 @@ def main():
 		[ 
 			{'params': get_parameters(model, bias=False)},
 			{'params': get_parameters(model, bias=True),
-			 'lr': cfg['lr'] * 2, 'weight_decay': 0},
+			 'lr': args.lr * 2, 'weight_decay': 0},
 		],
-		lr=cfg['lr'],
-		momentum=cfg['momentum'],
-		weight_decay=cfg['weight_decay']
+		lr=args.lr,
+		momentum=args.momentum,
+		weight_decay=args.weight_decay
 		)
 	# if resume:
 	# 	optim.load_state_dict(check_point['optim_state_dict'])
@@ -129,8 +124,8 @@ def main():
 		train_loader=train_loader,
 		val_loader=val_loader,
 		out=out,
-		max_iter=cfg['max_iteration'],
-		interval_validate=cfg.get('interval_validate', len(train_loader)),
+		max_iter=args.num_steps_stop,
+		interval_validate=args.save_pred_every
 	)
 	trainer.epoch = start_epoch
 	trainer.iteration = start_iteration
