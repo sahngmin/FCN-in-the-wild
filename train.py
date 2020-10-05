@@ -6,6 +6,7 @@ import os.path as osp
 import torch
 import datetime
 from torch.utils import data
+from deeplab_multi import Deeplab_multi
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.synthia_dataset import SYNTHIADataSet
 from dataset.cityscapes_dataset import CityScapesDataSet
@@ -17,6 +18,7 @@ from data.data_utils  import get_label_classes
 from FCN.vgg import VGG16
 import pdb 
 from options_train import TrainOptions
+import torch.optim as optim
 
 
 
@@ -68,6 +70,10 @@ def main():
 	# 	GTA5(root, split='train', transform=True),
 	# 	batch_size=1, shuffle=True, **kwargs)
 
+	# val_loader = torch.utils.data.DataLoader(
+	# 	GTA5(root, split='val', transform=True),
+	# 	batch_size=1, shuffle=False, **kwargs)
+
 	input_size = (1024, 512)
 
 	train_loader = data.DataLoader(
@@ -76,56 +82,34 @@ def main():
 					set=args.set, num_classes=args.num_classes),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
 
-	val_loader = torch.utils.data.DataLoader(
-		GTA5(root, split='val', transform=True),
-		batch_size=1, shuffle=False, **kwargs)
 
 	# model
-	model = FCN()
+	model = Deeplab_multi(args=args)
+
 	start_epoch = 0
 	start_iteration = 0
 
 	check_point = None
-	## resume 
-	if resume:
-		if os.listdir(resume):
-			check_points = os.listdir(resume)
-			check_point = osp.join(resume, check_points[-1])
-			check_point = torch.load(check_point)
-			model.load_state_dict(check_point['model_state_dict'])
-			start_epoch = check_point['epoch']
-			start_iteration = check_point['iteration']
-	else:
-		#initialize the model
-		vgg = VGG16(pretrained=True)
-		model.copy_para_from_vgg16(vgg)
+
 
 	if cuda:
 		model = model.cuda()
 
 	# optimizer
-	optim = torch.optim.SGD(
-		[ 
-			{'params': get_parameters(model, bias=False)},
-			{'params': get_parameters(model, bias=True),
-			 'lr': args.lr * 2, 'weight_decay': 0},
-		],
-		lr=args.lr,
-		momentum=args.momentum,
-		weight_decay=args.weight_decay
-		)
+	optimizer = optim.SGD(model.optim_parameters(args),
+                          lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
 	# if resume:
 	# 	optim.load_state_dict(check_point['optim_state_dict'])
 
 	trainer = Trainer(
 		cuda=cuda,
 		model=model,
-		optimizer=optim,
+		optimizer=optimizer,
 		train_loader=train_loader,
-		val_loader=val_loader,
 		out=out,
 		max_iter=args.num_steps_stop,
-		interval_validate=args.save_pred_every
+		interval_validate=args.save_pred_every,
+		args=args
 	)
 	trainer.epoch = start_epoch
 	trainer.iteration = start_iteration

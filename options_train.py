@@ -140,7 +140,5 @@ class TrainOptions(BaseOptions):
                                  help="snapshot directory")
 
 
-        self.parser.add_argument('-c', '--config', type=int, default=1,
-                            choices=configurations.keys())
         self.parser.add_argument('--resume', help='Checkpoint path', default='FCN/checkpoints/')
         self.parser.add_argument('-transfer', type=bool, default=False)

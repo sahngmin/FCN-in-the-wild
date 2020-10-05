@@ -7,8 +7,8 @@ import base64
 import urllib
 import hashlib
 
-# import torch
-# import torchvision
+import torch
+import torchvision
 
 def VGG16(pretrained = False):
   model = torchvision.models.vgg16(pretrained=False)
@@ -23,7 +23,7 @@ def VGG16(pretrained = False):
 
 def _get_vgg16_pretrained_model():
 
-  file_path = osp.join(os.getcwd(), 'pretrain_model','vgg16_from_caffe.pth')
+  file_path = osp.join(os.getcwd(), 'FCN', 'pretrain_model', 'vgg16_from_caffe.pth')
   
   if not os.path.exists(file_path):
     try:
